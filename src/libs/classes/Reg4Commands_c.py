@@ -1,5 +1,13 @@
 class Reg4Commands_c:  # singletone
     __instance = None
+
+    @staticmethod
+    def getInstance():
+        """ Static access method. """
+        if None == self.__instance:
+            Reg4Commands_c()
+        return self.__instance
+
     _persist_methods = ['get', 'save', 'delete', 'asdf']
 
     def __init__(self):
@@ -11,14 +19,7 @@ class Reg4Commands_c:  # singletone
             self._hTable = {}
             self._hTracking = {}
 
-    @staticmethod
-    def getInstance():
-        """ Static access method. """
-        if self.__instance == None:
-            Reg4Commands_c()
-        return self.__instance
-
-    def add_action(self, location, cmnd, value='' ):
+    def add_action(self, location, cmnd, value=''):
         if not location in self._hTable:
             self._hTable[location] = {}
         if value in self._hTable[location]:
