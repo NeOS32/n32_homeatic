@@ -1,4 +1,4 @@
-from db_schema import tts, cfg, app, db, type2name, gramma2type, name2type, TTS_getRootDir, TTS_getDir4Type, TTS_getFullDir4TTSObj, my_dump, TTS_getCountByType
+from libs.funs.db_schema import tts, cfg, app, db, type2name, gramma2type, name2type, TTS_getRootDir, TTS_getDir4Type, TTS_getFullDir4TTSObj, my_dump, TTS_getCountByType
 from blinker import signal
 from datetime import datetime
 from sqlalchemy import and_
@@ -6,6 +6,7 @@ import paho.mqtt.client as mqtt
 import time
 import subprocess
 import re
+import os
 
 import random
 import asyncio
@@ -15,7 +16,8 @@ import argparse
 import libs.classes.Reg4vars_c as Reg4vars_c
 import libs.classes.Reg4Commands_c as Reg4Commands_c
 import libs.classes.Reg4Events_c as Reg4Events_c
-import libs.classes.Reg4Listeners_c as Reg4Listeners_c
+import libs.classes.Reg4Listeners_c as Reg4Listeners_m
+import libs.classes.Reg4Configs_c as Reg4Configs_m
 
 import libs.classes.var_c as var_c
 import libs.classes.Cmnd_c as Cmnd_c
@@ -29,7 +31,9 @@ BRAMA_SLOT_IN_MINS_DEBUG = 1
 BRAMA_SLOT_IN_MINS_NORMAL = 15
 TIMER_15MINS = 15
 
-GATE_LOC = r'prefix/brama/sensors/bin_in/0'
+PREFIX='prefix/'
+
+GATE_LOC = f'{PREFIX}ard/brama/sensors/bin_in/0'
 
 ID_ERROR_L3_NET_NO_GOOGLE = 665
 ID_ERROR_L2_NET_NO_ISP_EXT_ROOTER = 664
@@ -43,7 +47,10 @@ CFG_WITH_AUDIO = True
 
 # The broker configuration
 # broker_address="iot.eclipse.org"
-broker_address = "TODO: ip address of your broker"
+broker_address = os.environ.get("HOMEATIC_IP_BROKER")
+if not broker_address:
+    raise Exception(
+        "Broker address must be defined with the 'HOMEATIC_IP_BROKER' environmental variable.")
 broker_main_topic = "#"
 
 # the arguments parser
@@ -98,6 +105,7 @@ def detect_access():
         last_notification = 0
         return
 
+    HOSTS = Reg4Configs_m.Reg4Configs_c.getInstance().getConfig('hosts')
     notify = -1
     if False == ping(HOSTS['L3']):
         if False == ping(HOSTS['L2']):
@@ -126,25 +134,25 @@ def detect_access():
 REG = Reg4vars_c.Reg4vars_c()
 REG.add(var_c.var_c('TEMP_CONTROL_BRAMA',
                     Event_c.Inputs.TEMP_SYSTEM,
-                    'prefix/brama/sensors/T/values/0', 'MajorQuant', False))
+                    f'{PREFIX}ard/brama/sensors/T/values/0', 'MajorQuant', False))
 REG.add(var_c.var_c('TEMP_OUTSIDE',
                     Event_c.Inputs.TEMP_OUTSIDE,
-                    'prefix/brama/sensors/T/values/1', 'MajorQuant', False, -1))
+                    f'{PREFIX}ard/brama/sensors/T/values/1', 'MajorQuant', False, -1))
 REG.add(var_c.var_c('TEMP_KITCHEN_MATA',
                     Event_c.Inputs.TEMP_HEATING,
-                    'prefix/kitchen/sensors/T/values/mata', 'MajorQuant', False))
+                    f'{PREFIX}ard/kitchen/sensors/T/values/mata', 'MajorQuant', False))
 REG.add(var_c.var_c('TEMP_KIDS_MATA',
                     Event_c.Inputs.TEMP_HEATING,
-                    'prefix/bathroomZ/sensors/T/values/mata', 'MajorQuant'))
+                    f'{PREFIX}ard/bathroomZ/sensors/T/values/mata', 'MajorQuant'))
 REG.add(var_c.var_c('TEMP_ATTIC_HOT_WATER_SENT',
                     Event_c.Inputs.TEMP_WATER,
-                    'prefix/attic/sensors/T/values/0', 'MajorQuant', False))
+                    f'{PREFIX}ard/attic/sensors/T/values/0', 'MajorQuant', False))
 REG.add(var_c.var_c('TEMP_ATTIC_CO_HEATING_SENT',
                     Event_c.Inputs.TEMP_HEATING,
-                    'prefix/attic/sensors/T/values/6', 'MajorQuant', False))
+                    f'{PREFIX}ard/attic/sensors/T/values/6', 'MajorQuant', False))
 REG.add(var_c.var_c('TEMP_ATTIC_CO_HEATING_RET',
                     Event_c.Inputs.TEMP_HEATING,
-                    'prefix/attic/sensors/T/values/1', 'MajorQuant', False))
+                    f'{PREFIX}ard/attic/sensors/T/values/1', 'MajorQuant', False))
 
 
 REG.add(var_c.var_c('FEMALE_QUANT_HOUR',
@@ -215,7 +223,7 @@ def my_brama_close(*args):
 
 
 def my_kitchen_pir_triggered(*args):
-    client.publish("prefix/kitchen/control/commands", "P200005M1")
+    client.publish(f"{PREFIX}ard/kitchen/control/commands", "P200005M1")
 
     now = datetime.now()
     # only office hours
@@ -241,7 +249,7 @@ def my_kitchen_pir_triggered(*args):
         if temp > temp_mate_max:
             temp = temp_mate_max
         cmnd = f'H10{temp}{temp+1}5M1'  # H1024255M1
-        client.publish("prefix/kitchen/control/commands", cmnd)
+        client.publish(f"{PREFIX}ard/kitchen/control/commands", cmnd)
 
 
 def my_kitchen_white_button_pressed(*args):
@@ -258,23 +266,23 @@ def my_attic_pir_triggered(*args):
 
 
 def my_kitchen_red_button_pressed(*args):
-    client.publish("prefix/kitchen/control/commands", "P200005M1")
+    client.publish(f"{PREFIX}ard/kitchen/control/commands", "P200005M1")
 
     logging.debug(f"red button pressed")
 
 
 def my_bathroomZ_button2_triggered_opened(*args):
-    client.publish("prefix/bathroomZ/control/commands", "L00FFFFFF5M1")
+    client.publish(f"{PREFIX}ard/bathroomZ/control/commands", "L00FFFFFF5M1")
     logging.debug(f"Turning LED on")
 
 
 def my_bathroomZ_button2_triggered_closed(*args):
-    client.publish("prefix/bathroomZ/control/commands", "L00FFFFFF0M1")
+    client.publish(f"{PREFIX}ard/bathroomZ/control/commands", "L00FFFFFF0M1")
     logging.debug(f"Turning LED on")
 
 
 def my_bathroomZ_button1_triggered_new_colour(*args):
-    client.publish("prefix/bathroomZ/control/commands", "L601M1")
+    client.publish(f"{PREFIX}ard/bathroomZ/control/commands", "L601M1")
     logging.debug(f"Changing just colour for a next one")
 
 
@@ -283,17 +291,18 @@ mqtt.Client.connected_flag = False
 client = mqtt.Client("PI_Kitchen")  # create new instance
 
 # Reg4Listeners, like virtual paths
-Reg4Listeners = Reg4Listeners_c.Reg4Listeners_c(client, logging)
-Reg4Listeners.addConfig('TODO: PATH_1')
-Reg4Listeners.addConfig('TODO: PATH_2')
-Reg4Listeners.addConfig('TODO: PATH_3')
+Reg4Listeners = Reg4Listeners_m.Reg4Listeners_c(client, logging)
+Reg4Listeners.addConfig(
+    'garden', env_var_with_filename='HOMEATIC_PATH_CFG_GARDEN')
+Reg4Listeners.addConfig(
+    'hosts', env_var_with_filename='HOMEATIC_PATH_CFG_HOSTS')
 
 # reg4events for processing by some heuristics
 Reg4Events = Reg4Events_c.Reg4Events_c()
 
 # reg4events for commands, like SAY... sth
 Reg4Commands = Reg4Commands_c.Reg4Commands_c()
-loc = r'prefix/kitchen/control/commands'
+loc = rf'{PREFIX}ard/kitchen/control/commands'
 cmnd_mata_on = Cmnd_c.Cmnd_c('78', my_podloga_kitch_on,
                              KUCHNIA_PODLOGA_SLOT_IN_MINS, 1)
 cmnd_mata_off = Cmnd_c.Cmnd_c('79', my_podloga_kitch_off, 0, 1)
@@ -304,32 +313,32 @@ Reg4Commands.add_action(GATE_LOC, cmnd1, 'OPENED')
 Reg4Commands.add_action(GATE_LOC, cmnd2, 'CLOSED')
 
 # bathroomZ
-loc = r'prefix/kitchen/sensors/bin_in/4'
+loc = rf'{PREFIX}ard/kitchen/sensors/bin_in/4'
 cmnd = Cmnd_c.Cmnd_c(None, my_kitchen_pir_triggered, 0, 1)
 Reg4Commands.add_action(loc, cmnd, 'OPENED')
 
-loc = r'prefix/kitchen/sensors/bin_in/0'  # bialy, dodanie 10min to timera
+loc = rf'{PREFIX}ard/kitchen/sensors/bin_in/0'  # bialy, dodanie 10min to timera
 cmnd = Cmnd_c.Cmnd_c(781, my_kitchen_white_button_pressed, 0, 1)
 Reg4Commands.add_action(loc, cmnd, 'OPENED')
 
-loc = r'prefix/kitchen/sensors/bin_in/2'  # czerwony
+loc = rf'{PREFIX}ard/kitchen/sensors/bin_in/2'  # czerwony
 cmnd = Cmnd_c.Cmnd_c(None, my_kitchen_red_button_pressed, 0, 1)
 Reg4Commands.add_action(loc, cmnd, 'OPENED')
 
 # bathroomZ
-loc = r'prefix/bathroomZ/sensors/bin_in/0'
+loc = rf'{PREFIX}ard/bathroomZ/sensors/bin_in/0'
 cmnd_opened = Cmnd_c.Cmnd_c(None, my_bathroomZ_button2_triggered_opened, 0, 1)
 cmnd_closed = Cmnd_c.Cmnd_c(None, my_bathroomZ_button2_triggered_closed, 0, 1)
 Reg4Commands.add_action(loc, cmnd_opened, 'OPENED')
 Reg4Commands.add_action(loc, cmnd_closed, 'CLOSED')
 
-loc = r'prefix/bathroomZ/sensors/bin_in/1'
+loc = rf'{PREFIX}ard/bathroomZ/sensors/bin_in/1'
 cmnd_new_colour = Cmnd_c.Cmnd_c(
     None, my_bathroomZ_button1_triggered_new_colour, 0, 1)
 Reg4Commands.add_action(loc, cmnd_new_colour, 'OPENED')
 Reg4Commands.add_action(loc, cmnd_new_colour, 'CLOSED')
 
-loc = r'prefix/attic/sensors/bin_in/1'  # PIR triggered
+loc = rf'{PREFIX}ard/attic/sensors/bin_in/1'  # PIR triggered
 cmnd = Cmnd_c.Cmnd_c(None, my_attic_pir_triggered, 0, 1)
 Reg4Commands.add_action(loc, cmnd, 'OPENED')
 
@@ -447,7 +456,7 @@ def processReg4Commands(msg_d):
 
 def processReg4Listeners(msg_d):
     # processsing
-    if True == Reg4Listeners.processEvent(msg_d['topic'], msg_d['command']):
+    if True == Reg4Listeners.processEvent('garden', msg_d['topic'], msg_d['command']):
         logging.info(f'Listener reacted to: {msg_d}')
         return True
     return False
@@ -574,11 +583,14 @@ if __name__ == "__main__":
     # MQTT setup
     client.on_message = on_message  # attach function to callback
     client.on_connect = on_connect
-    client.loop_start()
+    mqttt_loop_started= False
 
     while True:
         try:
             client.connect(broker_address, 1883)  # connect to broker
+            if not mqttt_loop_started:
+                client.loop_start()
+                mqttt_loop_started= True
             break
         except:
             logging.info(

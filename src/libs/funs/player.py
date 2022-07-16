@@ -1,4 +1,4 @@
-from db_schema import tts, cfg, app, db, type2name, gramma2type, name2type, TTS_getRootDir, TTS_getDir4Type, TTS_getFullDir4TTSObj, my_dump, TTS_getCountByType
+from libs.funs.db_schema import tts, cfg, app, db, type2name, gramma2type, name2type, TTS_getRootDir, TTS_getDir4Type, TTS_getFullDir4TTSObj, my_dump, TTS_getCountByType
 from blinker import signal
 from datetime import datetime
 from sqlalchemy import and_
