@@ -37,31 +37,46 @@ class Reg4Listeners_c:  # singletone
             Reg4Listeners_c()
         return Reg4Listeners_c.__instance
 
-    def addConfig(self, prefix, file_name=None, env_var_with_filename=None):
+    def addConfig(self, file_name=None, env_var_with_filename=None):
         Reg4Configs_m.Reg4Configs_c.getInstance().addConfig(
-            prefix, file_name=file_name, env_var_with_filename=env_var_with_filename)
+            file_name=file_name, env_var_with_filename=env_var_with_filename)
 
-    def addListener(self, callable, prefix, topic, cmnd=None):
-        self.__Listeners[prefix][topic][cmnd][callable] = 1
+    def getListenersHash(self, prefixes, force_creation=False):
+        h = self.__Listeners
+        keyword = None
+        index = 0
 
-    def processEvent(self, prefix, topic, cmnd):
-        h = Reg4Configs_m.Reg4Configs_c.getInstance().getConfig(prefix)
+        while index < len(prefixes):
+            keyword = prefixes[index]  # getting an element from given index
+            if False == force_creation and keyword not in h:
+                return None
+            h = h[keyword]
+            index += 1
 
-        if topic in h:
-            # listeners notification
-            [f(topic) for f in self.__Listeners[prefix][topic][None]]
+        return h
 
-            if cmnd in h[topic]:
-                # command match processing
-                [f(cmnd) for f in self.__Listeners[prefix][topic][cmnd]]
+    def addListener(self, prefixes, callable):
+        # _semConfigs.acquire()
 
-                # finally, event processing
-                for v in h[topic][cmnd]:
-                    pp, cc = v.split("|")
-                    ret = self.mqtt_client.publish(pp, cc)
-                    if ret.rc:
-                            self.logging.warn(
-                                f"Couldn't send message '{cc}' to '{pp}'")
-                return True
+        h = self.getListenersHash(prefixes, force_creation=True)
+        h[callable] = 1
 
-        return False  # False means path not served, so can be handled by sth else
+        # _semConfigs.release()
+
+    # processes events declared both:
+    #  - in external jsons
+    #  - in source code in a form of listener
+    def processEvent(self, prefixes):
+        # listeners first (source code)
+        H = self.getListenersHash(prefixes)
+        if H:
+            [f() for f in H]
+
+        # actions second (jsons),but only when we have level > 1 (means path and value)
+        if len(prefixes) > 1:
+            for v in Reg4Configs_m.Reg4Configs_c.getInstance().getConfigYield(prefixes):
+                pp, cc = v.split("|")
+                ret = self.mqtt_client.publish(pp, cc)
+                if ret.rc:
+                    self.logging.warn(
+                        f"Couldn't send message '{cc}' to '{pp}'")

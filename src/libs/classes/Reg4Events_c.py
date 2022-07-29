@@ -35,4 +35,4 @@ class Reg4Events_c:  # singletone
 
     def add_event(self, var):
         V = self.getEventVector(var)
-        self._Events.append(var)
+        # self._Events.append(var)
