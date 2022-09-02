@@ -72,6 +72,8 @@ def playToken(token, REG):
     var = REG.get_var(token)
     v = int(var.get_value())
     gramma = gramma2type(var.get_gramma())
+    if None == gramma:
+        raise "Bad gramma argument while playing a sample!"
 
     list = []
     is_minus = v < 0
@@ -117,7 +119,7 @@ def playToken(token, REG):
             first()
         list.append(t_1.id)
         v -= v
-    logging.debug( f" Playing: '{list}'")
+    logging.debug(f" Playing: '{list}'")
     for x in list:
         playNativeSample(x)
 
@@ -144,6 +146,7 @@ def handleSay(msg_num):
         playNativeSample(msg_num)
     obj.played_count += 1
     db.session.commit()
+
 
 def handleType(type_name, extra_id, repeats):
     while repeats >= 1:
@@ -172,4 +175,3 @@ def handleType(type_name, extra_id, repeats):
 
 # if __name__ == "__main__":
 #     # logging setup
-

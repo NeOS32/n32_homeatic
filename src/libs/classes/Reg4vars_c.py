@@ -1,10 +1,7 @@
 import libs.classes.Reg4Configs_c as Reg4Configs_m
-import libs.classes.var_c as var_c
+import libs.classes.Synchro_c as Synchro_m
+import libs.classes.var_c as var_m
 from collections import defaultdict
-import threading
-
-# See PEP-0343 for context managers discussion
-_semVars = threading.BoundedSemaphore(value=1)
 
 
 class Reg4vars_c:  # singletone
@@ -13,6 +10,9 @@ class Reg4vars_c:  # singletone
     """
     __instance = None
     _persist_methods = ['get', 'save', 'delete', 'asdf']
+
+    # See PEP-0343 for context managers discussion
+    _lock = Synchro_m.Synchro_c()
 
     def __init__(self):
         """ Virtual private constructor. """
@@ -26,83 +26,57 @@ class Reg4vars_c:  # singletone
     @staticmethod
     def getInstance():
         """ Static access method. """
-
-        _semVars.acquire()
-        if None == self.__instance:
-            Reg4vars_c()
-        _semVars.release()
+        with Reg4vars_c._lock:
+            if None == Reg4vars_c.__instance:
+                Reg4vars_c()
 
         return Reg4vars_c.__instance
 
     def addVar(self, var):
-
-        _semVars.acquire()
-        self._hTable[var.get_name()] = var
-        loc = var.get_location()
-        if None != loc:
-            self._hLocation[var.get_location()][var.get_name()] = var
-        _semVars.release()
+        with self._lock:
+            self._hTable[var.get_name()] = var
+            loc = var.get_location()
+            if None != loc:
+                self._hLocation[var.get_location()][var.get_name()] = var
 
     def get_value(self, name):
-
-        _semVars.acquire()
-        value = self.get_var(name).get_value()
-        _semVars.release()
-
-        return value
+        with self._lock:
+            return self.get_var(name).get_value()
 
     def get_var(self, name):
-
-        _semVars.acquire()
-        var = self._hTable.get(name)
-        _semVars.release()
-
-        return var
+        with self._lock:
+            return self._hTable.get(name)
 
     def assign(self, name, value):
-
-        _semVars.acquire()
-        self._hTable.get(name).set_value(value)
-        _semVars.release()
+        with self._lock:
+            self._hTable.get(name).set_value(value)
 
     def is_stored(self, name):
-
-        _semVars.acquire()
-        b = name in self._hTable
-        _semVars.release()
-
-        return b
+        with self._lock:
+            return name in self._hTable
 
     def is_tracked(self, location):
-
-        _semVars.acquire()
-        b = location in self._hLocation
-        _semVars.release()
-
-        return b
+        with self._lock:
+            return location in self._hLocation
 
     def get_tracked_var_yield(self, location):
-
-        _semVars.acquire()
-        h = self._hLocation.get(location)
-        if h:
-            for v in self._hLocation.get(location).keys():
-                yield h.get(v)
-        _semVars.release()
+        with self._lock:
+            h = self._hLocation.get(location)
+            if h:
+                for v in self._hLocation.get(location).keys():
+                    yield h.get(v)
 
     def addConfig(self, extra_namespace, file_name=None, env_var_with_filename=None):
         Reg4Configs_m.Reg4Configs_c.getInstance().addConfig(
             extra_namespace=extra_namespace, file_name=file_name, env_var_with_filename=env_var_with_filename)
 
     def InstantiateVars(self, extra_namespace):
-
         for k, h in Reg4Configs_m.Reg4Configs_c.getInstance().getConfigYield([extra_namespace]):
-
             # a variable instantiation
-            var = var_c.var_c(name=k,
+            var = var_m.var_c(name=k,
                               event_class="???",
                               location=h.get('path'),
-                              gramma=h.get('gramma'),
+                              gramma=h.get('gramma', "MajorQuant"),
                               debug=h.get('debug'),
                               regex=h.get('regex'),
                               default_value=h.get('default_value')

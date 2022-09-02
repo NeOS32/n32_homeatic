@@ -1,4 +1,5 @@
 import libs.classes.Reg4Configs_c as Reg4Configs_m
+import libs.classes.Synchro_c as Synchro_m
 from time import sleep
 
 
@@ -17,6 +18,7 @@ class Reg4Listeners_c:  # singletone
     """ A registry for MQTT listeners """
     __instance = None
     _persist_methods = ['get', 'save', 'delete', 'asdf']
+    _lock = Synchro_m.Synchro_c()
 
     def __init__(self, mqtt_client, logging):
         """ Virtually private constructor. """
@@ -33,15 +35,19 @@ class Reg4Listeners_c:  # singletone
     @staticmethod
     def getInstance():
         """ Static access method. """
-        if None == Reg4Listeners_c.__instance:
-            Reg4Listeners_c()
+
+        with Reg4Listeners_c._lock:
+            if None == Reg4Listeners_c.__instance:
+                Reg4Listeners_c()
+
         return Reg4Listeners_c.__instance
 
     def addConfig(self, file_name=None, env_var_with_filename=None):
         Reg4Configs_m.Reg4Configs_c.getInstance().addConfig(
             file_name=file_name, env_var_with_filename=env_var_with_filename)
 
-    def getListenersHash(self, prefixes, force_creation=False):
+    # private function
+    def __getListenersHash(self, prefixes, force_creation=False):
         h = self.__Listeners
         keyword = None
         index = 0
@@ -56,21 +62,19 @@ class Reg4Listeners_c:  # singletone
         return h
 
     def addListener(self, prefixes, callable):
-        # _semConfigs.acquire()
-
-        h = self.getListenersHash(prefixes, force_creation=True)
-        h[callable] = 1
-
-        # _semConfigs.release()
+        with self._lock:
+            h = self.__getListenersHash(prefixes, force_creation=True)
+            h[callable] = 1
 
     # processes events declared both:
     #  - in external jsons
     #  - in source code in a form of listener
     def processEvent(self, prefixes):
         # listeners first (source code)
-        H = self.getListenersHash(prefixes)
-        if H:
-            [f() for f in H]
+        with self._lock:
+            H = self.__getListenersHash(prefixes)
+            if H:
+                [f() for f in H]
 
         # actions second (jsons),but only when we have level > 1 (means path and value)
         if len(prefixes) > 1:

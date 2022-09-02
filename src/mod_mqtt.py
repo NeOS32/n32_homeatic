@@ -1,29 +1,29 @@
-from libs.funs.db_schema import tts, cfg, app, db, type2name, gramma2type, name2type, TTS_getRootDir, TTS_getDir4Type, TTS_getFullDir4TTSObj, my_dump, TTS_getCountByType
+
 from blinker import signal
 from datetime import datetime
 from sqlalchemy import and_
 import paho.mqtt.client as mqtt
+
 import time
 import subprocess
 import re
 import os
-
 import random
 import asyncio
 import logging
 import argparse
+import signal
+
+from libs.funs.db_schema import tts, db, name2type, TTS_getCountByType
+import libs.funs.player as player
 
 import libs.classes.Reg4vars_c as Reg4vars_c
 import libs.classes.Reg4Commands_c as Reg4Commands_c
 import libs.classes.Reg4Events_c as Reg4Events_c
 import libs.classes.Reg4Listeners_c as Reg4Listeners_m
 import libs.classes.Reg4Configs_c as Reg4Configs_m
-
-import libs.classes.var_c as var_c
 import libs.classes.Cmnd_c as Cmnd_c
 import libs.classes.Event_c as Event_c
-
-import libs.funs.player as player
 
 
 KUCHNIA_PODLOGA_SLOT_IN_MINS = 30
@@ -31,7 +31,7 @@ BRAMA_SLOT_IN_MINS_DEBUG = 1
 BRAMA_SLOT_IN_MINS_NORMAL = 15
 TIMER_15MINS = 15
 
-PREFIX='prefix/'
+PREFIX = ''
 
 GATE_LOC = f'{PREFIX}ard/brama/sensors/bin_in/0'
 
@@ -73,7 +73,7 @@ else:
     CFG_WITH_AUDIO = False
 
 # logging setup
-format = "%(asctime)s_%(levelname)s:  %(message)s"
+format = "%(asctime)s_%(levelname)s_%(threadName)s:  %(message)s"
 logging.basicConfig(format=format, level=debug_level_numeric,
                     datefmt="%H:%M:%S")  # filename='example.log',
 logging.info("Main: creating new instance of MQTT listener")
@@ -91,8 +91,6 @@ def ping(host):
 
 
 last_notification = 0
-
-
 def detect_access():
     now = datetime.now()
     day_num = now.weekday()
@@ -106,6 +104,7 @@ def detect_access():
         return
 
     HOSTS = Reg4Configs_m.Reg4Configs_c.getInstance().getConfig('hosts')
+
     notify = -1
     if False == ping(HOSTS['L3']):
         if False == ping(HOSTS['L2']):
@@ -130,53 +129,16 @@ def detect_access():
             last_notification = 0
 
 
+def handle_pdb(sig, frame):
+    import pdb
+    pdb.Pdb().set_trace(frame)
+
+
 # following code just creates placeholders for data
 REG = Reg4vars_c.Reg4vars_c()
-REG.add(var_c.var_c('TEMP_CONTROL_BRAMA',
-                    Event_c.Inputs.TEMP_SYSTEM,
-                    f'{PREFIX}ard/brama/sensors/T/values/0', 'MajorQuant', False))
-REG.add(var_c.var_c('TEMP_OUTSIDE',
-                    Event_c.Inputs.TEMP_OUTSIDE,
-                    f'{PREFIX}ard/brama/sensors/T/values/1', 'MajorQuant', False, -1))
-REG.add(var_c.var_c('TEMP_KITCHEN_MATA',
-                    Event_c.Inputs.TEMP_HEATING,
-                    f'{PREFIX}ard/kitchen/sensors/T/values/mata', 'MajorQuant', False))
-REG.add(var_c.var_c('TEMP_KIDS_MATA',
-                    Event_c.Inputs.TEMP_HEATING,
-                    f'{PREFIX}ard/bathroomZ/sensors/T/values/mata', 'MajorQuant'))
-REG.add(var_c.var_c('TEMP_ATTIC_HOT_WATER_SENT',
-                    Event_c.Inputs.TEMP_WATER,
-                    f'{PREFIX}ard/attic/sensors/T/values/0', 'MajorQuant', False))
-REG.add(var_c.var_c('TEMP_ATTIC_CO_HEATING_SENT',
-                    Event_c.Inputs.TEMP_HEATING,
-                    f'{PREFIX}ard/attic/sensors/T/values/6', 'MajorQuant', False))
-REG.add(var_c.var_c('TEMP_ATTIC_CO_HEATING_RET',
-                    Event_c.Inputs.TEMP_HEATING,
-                    f'{PREFIX}ard/attic/sensors/T/values/1', 'MajorQuant', False))
-
-
-REG.add(var_c.var_c('FEMALE_QUANT_HOUR',
-                    Event_c.Inputs.TIME_HOUR, None, 'FemOrderQuant'))
-REG.add(var_c.var_c('MALE_QUANT_DAY',
-                    Event_c.Inputs.TIME_DAY_OF_WEEK, None, 'MaleOrderQuant'))
-REG.add(var_c.var_c('YEAR', Event_c.Inputs.TIME_YEAR, None, 'MaleOrderQuant'))
-REG.add(var_c.var_c('MONTH', Event_c.Inputs.TIME_MONTH, None, 'MaleOrderQuant'))
-REG.add(var_c.var_c('DAY', Event_c.Inputs.TIME_DAY, None, 'MaleOrderQuant'))
-REG.add(var_c.var_c('HOUR', Event_c.Inputs.TIME_HOUR, None, 'FemOrderQuant'))
-REG.add(var_c.var_c('MINUTE', Event_c.Inputs.TIME_MINUTE, None, 'MajorQuant'))
-REG.add(var_c.var_c('SECOND', Event_c.Inputs.TIME_SECOND, None, 'MajorQuant'))
-REG.add(var_c.var_c('GATE_OPENED_IN_MINUTES',
-                    Event_c.Inputs.TIME_INTERVAL, None, 'MajorQuant'))
-REG.add(var_c.var_c('SAY_DAY_NAME_CURRENT',
-                    Event_c.Inputs.UNKNOWN, None, 'any'))
-REG.add(var_c.var_c('SAY_MONTH', Event_c.Inputs.UNKNOWN, None, 'any'))
-REG.add(var_c.var_c('SAY_RPI_KITCHEN_UPTIME',
-                    Event_c.Inputs.UNKNOWN, None, 'any'))
-REG.add(var_c.var_c('SAY_NET_DEVS_LAST_SEEN',
-                    Event_c.Inputs.UNKNOWN, None, 'any'))
-# used for keeping timer value
-REG.add(var_c.var_c('TIMER_CURRENT_VALUE',
-                    Event_c.Inputs.UNKNOWN, None, 'any'))
+REG.addConfig(
+    'vars', env_var_with_filename='HOMEATIC_PATH_CFG_VARS')
+REG.InstantiateVars('vars')
 
 
 def my_podloga_kitch_on(*args):
@@ -223,8 +185,6 @@ def my_brama_close(*args):
 
 
 def my_kitchen_pir_triggered(*args):
-    client.publish(f"{PREFIX}ard/kitchen/control/commands", "P200005M1")
-
     now = datetime.now()
     # only office hours
     if now.hour < 6 or now.hour > 20:
@@ -261,40 +221,22 @@ def my_kitchen_white_button_pressed(*args):
     logging.debug(f"White button pressed")
 
 
-def my_attic_pir_triggered(*args):
-    logging.debug(f"PIR triggered in Attic")
-
-
-def my_kitchen_red_button_pressed(*args):
-    client.publish(f"{PREFIX}ard/kitchen/control/commands", "P200005M1")
-
-    logging.debug(f"red button pressed")
-
-
-def my_bathroomZ_button2_triggered_opened(*args):
-    client.publish(f"{PREFIX}ard/bathroomZ/control/commands", "L00FFFFFF5M1")
-    logging.debug(f"Turning LED on")
-
-
-def my_bathroomZ_button2_triggered_closed(*args):
-    client.publish(f"{PREFIX}ard/bathroomZ/control/commands", "L00FFFFFF0M1")
-    logging.debug(f"Turning LED on")
-
-
-def my_bathroomZ_button1_triggered_new_colour(*args):
-    client.publish(f"{PREFIX}ard/bathroomZ/control/commands", "L601M1")
-    logging.debug(f"Changing just colour for a next one")
-
-
 # MQTT instantiation
 mqtt.Client.connected_flag = False
 client = mqtt.Client("PI_Kitchen")  # create new instance
 
+
 # Reg4Listeners, like virtual paths
 Reg4Listeners = Reg4Listeners_m.Reg4Listeners_c(client, logging)
 Reg4Listeners.addConfig(
-    'garden', env_var_with_filename='HOMEATIC_PATH_CFG_GARDEN')
+    env_var_with_filename='HOMEATIC_PATH_CFG_GARDEN')
 Reg4Listeners.addConfig(
+    env_var_with_filename='HOMEATIC_PATH_CFG_BATHROOMZ')
+Reg4Listeners.addConfig(
+    env_var_with_filename='HOMEATIC_PATH_CFG_ATTIC')
+
+Reg4Configs = Reg4Configs_m.Reg4Configs_c.getInstance()
+Reg4Configs.addConfig(
     'hosts', env_var_with_filename='HOMEATIC_PATH_CFG_HOSTS')
 
 # reg4events for processing by some heuristics
@@ -302,7 +244,7 @@ Reg4Events = Reg4Events_c.Reg4Events_c()
 
 # reg4events for commands, like SAY... sth
 Reg4Commands = Reg4Commands_c.Reg4Commands_c()
-loc = rf'{PREFIX}ard/kitchen/control/commands'
+loc = f'{PREFIX}ard/kitchen/control/commands'
 cmnd_mata_on = Cmnd_c.Cmnd_c('78', my_podloga_kitch_on,
                              KUCHNIA_PODLOGA_SLOT_IN_MINS, 1)
 cmnd_mata_off = Cmnd_c.Cmnd_c('79', my_podloga_kitch_off, 0, 1)
@@ -312,35 +254,15 @@ cmnd2 = Cmnd_c.Cmnd_c(4, my_brama_close, 1, 1)
 Reg4Commands.add_action(GATE_LOC, cmnd1, 'OPENED')
 Reg4Commands.add_action(GATE_LOC, cmnd2, 'CLOSED')
 
-# bathroomZ
-loc = rf'{PREFIX}ard/kitchen/sensors/bin_in/4'
+# kitchen
+loc = f'{PREFIX}ard/kitchen/sensors/bin_in/4'
 cmnd = Cmnd_c.Cmnd_c(None, my_kitchen_pir_triggered, 0, 1)
 Reg4Commands.add_action(loc, cmnd, 'OPENED')
 
-loc = rf'{PREFIX}ard/kitchen/sensors/bin_in/0'  # bialy, dodanie 10min to timera
+loc = f'{PREFIX}ard/kitchen/sensors/bin_in/0'  # bialy, dodanie 10min to timera
 cmnd = Cmnd_c.Cmnd_c(781, my_kitchen_white_button_pressed, 0, 1)
 Reg4Commands.add_action(loc, cmnd, 'OPENED')
 
-loc = rf'{PREFIX}ard/kitchen/sensors/bin_in/2'  # czerwony
-cmnd = Cmnd_c.Cmnd_c(None, my_kitchen_red_button_pressed, 0, 1)
-Reg4Commands.add_action(loc, cmnd, 'OPENED')
-
-# bathroomZ
-loc = rf'{PREFIX}ard/bathroomZ/sensors/bin_in/0'
-cmnd_opened = Cmnd_c.Cmnd_c(None, my_bathroomZ_button2_triggered_opened, 0, 1)
-cmnd_closed = Cmnd_c.Cmnd_c(None, my_bathroomZ_button2_triggered_closed, 0, 1)
-Reg4Commands.add_action(loc, cmnd_opened, 'OPENED')
-Reg4Commands.add_action(loc, cmnd_closed, 'CLOSED')
-
-loc = rf'{PREFIX}ard/bathroomZ/sensors/bin_in/1'
-cmnd_new_colour = Cmnd_c.Cmnd_c(
-    None, my_bathroomZ_button1_triggered_new_colour, 0, 1)
-Reg4Commands.add_action(loc, cmnd_new_colour, 'OPENED')
-Reg4Commands.add_action(loc, cmnd_new_colour, 'CLOSED')
-
-loc = rf'{PREFIX}ard/attic/sensors/bin_in/1'  # PIR triggered
-cmnd = Cmnd_c.Cmnd_c(None, my_attic_pir_triggered, 0, 1)
-Reg4Commands.add_action(loc, cmnd, 'OPENED')
 
 map_days = {'0': 100,  # poniedzialek
             '1': 101,  # wtorek
@@ -383,7 +305,7 @@ def handleSample(msg_num):
 def on_connect(client, userdata, flags, rc):
     if 0x0 == rc:
         client.connected_flag = True
-        logging.info("Connected with result code "+str(rc))
+        logging.info(f"Connected with result code: {str(rc)}, flags={flags}")
         logging.info(f"Subscribing to topic: '{broker_main_topic}'")
 
         client.subscribe(broker_main_topic)
@@ -454,12 +376,15 @@ def processReg4Commands(msg_d):
     return True
 
 
-def processReg4Listeners(msg_d):
-    # processsing
-    if True == Reg4Listeners.processEvent('garden', msg_d['topic'], msg_d['command']):
+def processReg4Listeners(msg_d, with_topic=False):
+    # topic check
+    if True == with_topic:
+        if True == Reg4Listeners.processEvent([msg_d['topic']]):
+            logging.info(f'Listener reacted to: {msg_d}')
+
+    # command check, here we can react to command + value pair
+    if True == Reg4Listeners.processEvent([msg_d['topic'], msg_d['command']]):
         logging.info(f'Listener reacted to: {msg_d}')
-        return True
-    return False
 
 
 def handle_say_message(msg):
@@ -512,30 +437,57 @@ def on_message(client, userdata, message):
         msg = str(message.payload.decode("utf-8"))
         msg_d = {'command': msg, 'topic': str(message.topic)}
 
+        # if getNumOfHandlers([msg_d['command']]) > 0:
+        #     processHandlers([msg_d['command']])
+        # if getNumOfHandlers([msg_d['topic'], msg_d['command']]) > 0:
+        #     processHandlers([msg_d['command'], msg_d['command']])
+
+        # Handlers:
+        #  - say
+        #  - inline actions (listeners to command and/or command + topic)
+        #  - external actions (via json)
+        #  - complicated functions
+
         # handling commands like SAY, SAY_MATH etc
-        if True == handle_say_message(msg):
-            return
+        if re.search('/voice/salon', message.topic):
+            if True == handle_say_message(msg_d['command']):
+                return
 
         # is topic being tracked for a value?
         if REG.is_tracked(message.topic):
-            var = REG.get_tracked_var(message.topic)
-            var.set_value(int(float(msg_d['command'])))
-            if var.get_debug():
-                logging.info(
-                    f" {var.get_name()} update to {REG.get_var(var.get_name()).get_value()}")
-            # even though it might have been processed in tracking, another action might have been
-            # scheduled for this location, so not breaking, just continuing
+            # in given location we can have more than one var
+            for var in REG.get_tracked_var_yield(message.topic):
+                regex = var.get_key('regex')
+                updated = False
+                if regex:
+                    x = re.search(regex, msg)
+                    if x:
+                        var.set_value(x.group(1))
+                        updated = True
+                    # else:
+                    #     logging.debug(
+                    #         f" Regex set to '{regex}', but no match in {var.get_name()}")
+                else:
+                    var.set_value(int(float(msg_d['command'])))
+                    updated = True
 
-            # events handling for "smartnest"
-            Reg4Events.add_event(var)
+                if updated and var.get_debug():
+                    logging.info(
+                        f" {var.get_name()} update to {REG.get_var(var.get_name()).get_value()}")
+        #     # even though it might have been processed in tracking, another action might have been
+        #     # scheduled for this location, so not breaking, just continuing
+
+        #     # events handling for "smartnest"
+        #     Reg4Events.add_event(var)
 
         # normal processing
-        if False == processReg4Commands(msg_d):
-            processReg4Listeners(msg_d)
+        if False == processReg4Listeners(msg_d):
+            processReg4Commands(msg_d)
 
     except ValueError:
-        player.playNativeSample(ID_ERROR)
-        logging.warning("Oops!  That was no valid number.  Try again...")
+        # player.playNativeSample(ID_ERROR)
+        logging.warning(
+            f"Oops!  That was no valid number. {ValueError.strerror} Try again...")
 
 
 def on_log(client, userdata, level, buf):
@@ -568,6 +520,7 @@ async def task_Periodic10s():
         REG.get_var('MINUTE').set_value(now.minute)
         REG.get_var('SECOND').set_value(now.second)
         REG.get_var('SAY_DAY_NAME_CURRENT').set_value(map_days[str(day_num)])
+        REG.get_var('MOD_MQTT_UPTIME_IN_DAYS')
 
         await asyncio.sleep(10)
 
@@ -578,19 +531,24 @@ async def task_Periodic1s():
         client.loop()
         await asyncio.sleep(1)
 
-
 if __name__ == "__main__":
     # MQTT setup
     client.on_message = on_message  # attach function to callback
     client.on_connect = on_connect
-    mqttt_loop_started= False
+    mqttt_loop_started = False
 
+    # debugger setup
+    signal.signal(signal.SIGUSR1, handle_pdb)
+    logging.info(
+        f"My pid: '{os.getpid()}'")
+
+    # main loop
     while True:
         try:
             client.connect(broker_address, 1883)  # connect to broker
             if not mqttt_loop_started:
                 client.loop_start()
-                mqttt_loop_started= True
+                mqttt_loop_started = True
             break
         except:
             logging.info(
